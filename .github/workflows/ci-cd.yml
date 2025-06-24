@@ -2,48 +2,53 @@ name: Road Metrics CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   AWS_REGION: us-east-1
-  NODE_VERSION: '18'
-  PYTHON_VERSION: '3.9'
+  NODE_VERSION: "18"
+  PYTHON_VERSION: "3.9"
 
 jobs:
   test-frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "pnpm"
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Run linting
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Run type checking
-        run: npm run type-check
+        run: pnpm run type-check
 
       - name: Run unit tests
-        run: npm run test
+        run: pnpm run test
 
       - name: Run integration tests
-        run: npm run test:integration
+        run: pnpm run test:integration
 
       - name: Build application
-        run: npm run build
+        run: pnpm run build
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: frontend-build
           path: .next/
@@ -112,15 +117,15 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
 
       - name: Upload Trivy scan results
         uses: github/codeql-action/upload-sarif@v2
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: "trivy-results.sarif"
 
   deploy-staging:
     needs: [test-frontend, test-backend, security-scan]
@@ -242,7 +247,7 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: success
-          text: 'Road Metrics Platform deployed successfully to production! 🚀'
+          text: "Road Metrics Platform deployed successfully to production! 🚀"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
@@ -262,6 +267,6 @@ jobs:
         uses: 8398a7/action-slack@v3
         with:
           status: failure
-          text: 'Production deployment failed. Rollback initiated. 🔄'
+          text: "Production deployment failed. Rollback initiated. 🔄"
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
