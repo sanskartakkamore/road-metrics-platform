@@ -18,34 +18,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: latest
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: "pnpm"
+          cache: "npm"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Run linting
-        run: pnpm run lint
+        run: npm run lint
 
       - name: Run type checking
-        run: pnpm run type-check
+        run: npm run type-check
 
       - name: Run unit tests
-        run: pnpm run test
+        run: npm run test
 
       - name: Run integration tests
-        run: pnpm run test:integration
+        run: npm run test:integration
 
       - name: Build application
-        run: pnpm run build
+        run: npm run build
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -175,7 +170,6 @@ jobs:
           npm ci
           npm run build
           aws s3 sync .next/ s3://${{ secrets.STAGING_S3_BUCKET }} --delete
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.STAGING_CLOUDFRONT_ID }} --paths "/*"
 
       - name: Run smoke tests
         run: |
