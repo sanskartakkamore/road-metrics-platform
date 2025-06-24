@@ -1,0 +1,137 @@
+# Serverless Framework configuration for AWS deployment
+service: road-metrics-api
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  
+  environment:
+    STAGE: ${self:provider.stage}
+    DB_HOST: ${env:DB_HOST}
+    DB_NAME: ${env:DB_NAME}
+    DB_USER: ${env:DB_USER}
+    DB_PASSWORD: ${env:DB_PASSWORD}
+  
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - rds:DescribeDBInstances
+        - rds:Connect
+      Resource: "*"
+    - Effect: Allow
+      Action:
+        - logs:CreateLogGroup
+        - logs:CreateLogStream
+        - logs:PutLogEvents
+      Resource: "*"
+
+functions:
+  getDefects:
+    handler: lambda_functions.lambda_handler_get_defects
+    events:
+      - http:
+          path: api/defects
+          method: get
+          cors: true
+    timeout: 30
+    memorySize: 256
+
+  createDefect:
+    handler: lambda_functions.lambda_handler_create_defect
+    events:
+      - http:
+          path: api/defects
+          method: post
+          cors: true
+    timeout: 30
+    memorySize: 256
+
+  bulkUpload:
+    handler: lambda_functions.lambda_handler_bulk_upload
+    events:
+      - http:
+          path: api/upload
+          method: post
+          cors: true
+    timeout: 60
+    memorySize: 512
+
+  getAnalytics:
+    handler: lambda_functions.lambda_handler_analytics
+    events:
+      - http:
+          path: api/analytics
+          method: get
+          cors: true
+    timeout: 30
+    memorySize: 256
+
+  # Batch processing function for data aggregation
+  batchProcessor:
+    handler: batch_processor.lambda_handler
+    events:
+      - schedule: rate(1 hour)  # Run every hour
+    timeout: 300
+    memorySize: 1024
+
+resources:
+  Resources:
+    # RDS Database
+    RoadMetricsDB:
+      Type: AWS::RDS::DBInstance
+      Properties:
+        DBInstanceIdentifier: road-metrics-${self:provider.stage}
+        DBInstanceClass: db.t3.micro
+        Engine: postgres
+        EngineVersion: '13.7'
+        MasterUsername: ${env:DB_USER}
+        MasterUserPassword: ${env:DB_PASSWORD}
+        AllocatedStorage: 20
+        StorageType: gp2
+        VPCSecurityGroups:
+          - Ref: DatabaseSecurityGroup
+        DBSubnetGroupName:
+          Ref: DatabaseSubnetGroup
+        BackupRetentionPeriod: 7
+        MultiAZ: false
+        PubliclyAccessible: false
+        StorageEncrypted: true
+
+    # Security Group for RDS
+    DatabaseSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Security group for RDS database
+        VpcId: ${env:VPC_ID}
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 5432
+            ToPort: 5432
+            SourceSecurityGroupId:
+              Ref: LambdaSecurityGroup
+
+    # Security Group for Lambda
+    LambdaSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Security group for Lambda functions
+        VpcId: ${env:VPC_ID}
+
+    # Database Subnet Group
+    DatabaseSubnetGroup:
+      Type: AWS::RDS::DBSubnetGroup
+      Properties:
+        DBSubnetGroupDescription: Subnet group for RDS database
+        SubnetIds:
+          - ${env:SUBNET_ID_1}
+          - ${env:SUBNET_ID_2}
+
+plugins:
+  - serverless-python-requirements
+  - serverless-offline
+
+custom:
+  pythonRequirements:
+    dockerizePip: true
